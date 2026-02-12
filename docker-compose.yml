@@ -1,0 +1,20 @@
+version: '3.8'
+services:
+  nodeA:
+    image: distributedsystem:latest
+    container_name: nodeA
+    ports:
+      - "5031:5031"
+    environment:
+      - SERVER_PORT=5031
+      - NODE_ID=A
+      - PEER_URL=http://nodeB:5032
+  nodeB:
+    image: distributedsystem:latest
+    container_name: nodeB
+    ports:
+      - "5032:5032"
+    environment:
+      - SERVER_PORT=5032
+      - NODE_ID=B
+      - PEER_URL=http://nodeA:5031

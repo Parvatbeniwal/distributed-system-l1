@@ -1,0 +1,38 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: distributed-system
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: distributedsystem
+  template:
+    metadata:
+      labels:
+        app: distributedsystem
+    spec:
+      containers:
+        - name: distributedsystem
+          image: distributedsystem:latest
+          imagePullPolicy: Never
+          env:
+            - name: NODE_ID
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: PEER_URL
+              value: "http://distributed-system:8080"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: distributed-system
+spec:
+  selector:
+    app: distributedsystem
+  ports:
+    - protocol: TCP
+      port: 8080
+      targetPort: 8080
+  type: NodePort
