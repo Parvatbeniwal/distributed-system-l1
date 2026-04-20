@@ -19,9 +19,7 @@ import java.util.List;
 public class HeartBeatService {
 
     private static final Logger logger = LoggerFactory.getLogger(HeartBeatService.class);
-
     private final NodeState nodeState;
-
     private final HttpClient client = HttpClient.newHttpClient();
 
     @Value("${node.id}")

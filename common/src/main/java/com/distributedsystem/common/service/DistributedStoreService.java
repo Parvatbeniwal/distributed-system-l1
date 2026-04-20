@@ -1,5 +1,6 @@
 package com.distributedsystem.common.service;
 
+import com.distributedsystem.common.node.LogEntry;
 import com.distributedsystem.common.node.NodeRole;
 import com.distributedsystem.common.node.NodeState;
 import org.slf4j.Logger;
@@ -20,7 +21,6 @@ public class DistributedStoreService {
     private final List<String> peers;
 
     public DistributedStoreService(NodeState nodeState, ReplicationService replicationService, String nodeId, String peerUrls) {
-
         this.nodeState = nodeState;
         this.replicationService = replicationService;
         this.nodeId = nodeId;
@@ -34,25 +34,32 @@ public class DistributedStoreService {
      * Only leader can accept writes
      */
     public String put(String key, String value) {
-        if (nodeState.getRole() != NodeRole.LEADER) {
-            String leader = nodeState.getCurrentLeader();
-            logger.warn("Write rejected. Node {} is not leader. Leader is {}", nodeId, leader);
-            return "Not leader. Current leader is: " + leader;
-        }
-        // Store locally first
-        store.put(key, value);
-        logger.info("[{}] Stored locally key={} value={}", nodeId, key, value);
-        // Replicate to followers
-        replicateToFollowers(key, value);
+        long newIndex = nodeState.getLog().size() + 1;
+        LogEntry entry = new LogEntry(
+                nodeState.getTerm(),
+                newIndex,
+                key,
+                value
+        );
+
+       // append locally (uncommitted)
+        nodeState.appendEntry(entry);
+        // replicate via AppendEntries
+        replicateToFollowers(entry);
         return "Stored and replicated by leader " + nodeId;
     }
+
+
 
     /**
      * Called by leader to replicate to followers
      */
-    private void replicateToFollowers(String key, String value) {
-        replicationService.replicateToPeers(peers, key, value
-        );
+    private void replicateToFollowers(LogEntry entry) {
+       int  successCount = replicationService.appendEntriesToPeers(peers, entry);
+        if (successCount > peers.size() / 2) {
+            nodeState.setCommitIndex(entry.getIndex());
+            applyCommittedEntries();
+        }
     }
 
     /**
@@ -74,4 +81,26 @@ public class DistributedStoreService {
         return value;
     }
 
+    public synchronized void applyCommittedEntries() {
+        while (nodeState.getLastApplied() < nodeState.getCommitIndex()) {
+            long nextIndex = nodeState.incrementLastApplied();
+            LogEntry entry = nodeState.getLog().get((int) nextIndex - 1);
+            store.put(entry.getKey(), entry.getValue());
+        }
+    }
+
+  /*public String put(String key, String value) {
+        if (nodeState.getRole() != NodeRole.LEADER) {
+            String leader = nodeState.getCurrentLeader();
+            logger.warn("Write rejected. Node {} is not leader. Leader is {}", nodeId, leader);
+            return "Not leader. Current leader is: " + leader;
+        }
+        // Store locally first
+        store.put(key, value);
+        logger.info("[{}] Stored locally key={} value={}", nodeId, key, value);
+        // Replicate to followers
+        replicateToFollowers(key, value);
+        return "Stored and replicated by leader " + nodeId;
+
+    }*/
 }
